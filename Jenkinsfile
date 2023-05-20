@@ -2,77 +2,51 @@ pipeline {
     agent any
     
     tools{
-        jdk 'jdk17'
-        maven 'maven3'
+        jdk 'jdk'
+        maven 'maven3.8'
     }
     
-    environment {
-        SCANNER_HOME=tool 'sonar-scanner'
-    }
-
+    
     stages {
         stage('Git Checkout') {
             steps {
-                git branch: 'main', changelog: false, poll: false, url: 'https://github.com/SushantOps/Devops-CICD.git'
+                git branch: 'main', url: 'https://github.com/sangativamsikrishna/java-docker-genie.git'
             }
         }
-        
-        stage('CODE COMPILE') {
+        stage('Code Compile') {
             steps {
-               sh "mvn clean compile"
+                sh "mvn compile"
             }
         }
-        
-        stage('TEST CASES') {
+        stage('Code Test') {
             steps {
-               sh "mvn test"
+                sh "mvn test"
             }
         }
-        
-        stage('Sonarqube Analysis') {
+       
+        stage('OWASP Check') {
             steps {
-               withSonarQubeEnv('sonar-scanner') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Devops-CICD \
-                    -Dsonar.java.binaries=. \
-                    -Dsonar.projectKey=Devops-CICD '''
+                dependencyCheck additionalArguments: '  --scan ./  ', odcInstallation: 'DB'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+         stage('Code build') {
+            steps {
+                sh "mvn clean install"
+            }
+        }
+        stage('Docker Build & Push') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: '5bf9749f-9e3a-4869-a35a-97e00e35eca6') {
+                        
+                    sh "docker build -t cicd ."
+                    sh "docker tag cicd sangativamsikrishna/cicd:latest"
+                    sh "docker push sangativamsikrishna/cicd:latest"
                 }
-             }
-        }
-        stage('TRIVY SCAN') {
-            steps {
-               sh " trivy fs --security-checks vuln,config /var/lib/jenkins/workspace/CICD "
-            }
-        }
-        
-        stage('CODE BUILD') {
-            steps {
-               sh " mvn clean install "
-            }
-        }
-        
-        stage('DOCKER BUILD') {
-            steps {
-               script{
-                   withDockerRegistry(credentialsId: 'b0f72c00-5ae5-4b49-ab36-93350a87f2a6', toolName: 'docker-latest') {
-                        sh "docker build -t cicddevops ."
-                         
-                    }
-               }
-            }
-        }
-        
-        stage('DOCKER PUSH') {
-            steps {
-               script{
-                   withDockerRegistry(credentialsId: 'b0f72c00-5ae5-4b49-ab36-93350a87f2a6', toolName: 'docker-latest') {
-                        sh "docker tag cicddevops sushantkapare1717/cicddevops:$BUILD_ID "
-                        sh "docker push sushantkapare1717/cicddevops:$BUILD_ID "
-                         
-                    }
-               }
+                }
             }
         }
         
     }
-
 }
